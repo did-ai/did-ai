@@ -1,0 +1,47 @@
+{
+  "name": "@did-ai/sdk",
+  "version": "1.0.0",
+  "description": "Client SDK for did:ai decentralized identity system",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./types": {
+      "import": "./dist/types.js",
+      "types": "./dist/types.d.ts"
+    },
+    "./modules/skills": {
+      "import": "./dist/modules/skills.js",
+      "types": "./dist/modules/skills.d.ts"
+    },
+    "./modules/agents": {
+      "import": "./dist/modules/agents.js",
+      "types": "./dist/modules/agents.d.ts"
+    },
+    "./modules/did": {
+      "import": "./dist/modules/did.js",
+      "types": "./dist/modules/did.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.4.0",
+    "@noble/hashes": "^1.4.0",
+    "canonicalize": "^2.0.0"
+  },
+  "peerDependencies": {
+    "nanoid": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "typescript": "^5.4.3",
+    "vitest": "^1.4.0"
+  }
+}
