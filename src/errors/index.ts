@@ -11,7 +11,7 @@ export class DidAiError extends Error {
     super(message);
     this.name = "DidAiError";
     this.code = code;
-    this.status = ERROR_STATUS[code];
+    this.status = ERROR_STATUS[code] ?? 400;
     this.details = details;
     Error.captureStackTrace(this, this.constructor);
   }
