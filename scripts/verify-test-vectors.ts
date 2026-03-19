@@ -8,18 +8,66 @@ import {
 } from "../src/crypto/keys.js";
 import { signPayload, verifySignature } from "../src/crypto/signing.js";
 import canonicalize from "canonicalize";
+import { ed25519 } from "@noble/curves/ed25519";
+import { x25519 } from "@noble/curves/ed25519";
 
-console.log("=== Verifying Test Vectors from spec-release-fix.md ===\n");
+const X25519_PREFIX = new Uint8Array([0xec, 0x01]);
 
-// Use the specific private key from the test vectors
-const TEST_PRIVATE_KEY_HEX =
+console.log("=== Verifying ALL Test Vectors from spec-release-fix.md ===\n");
+
+// Test private keys from the spec
+const SIGNING_PRIVATE_KEY =
   "81b8668ddd9ea06b398430d37c0c0f79e3d60e0ec8b38495929e4c6e63cb8587";
-const TEST_PUBLIC_KEY_HEX =
-  "17f084838bebf42121a1159c530adc083259e5855fa34f51130cda24707f5c3f";
+const ROTATION_PRIVATE_KEY =
+  "081387aa82e713a18e6208f195d3e95c1e28b0b9b814c3969c4e863e93ef9e1a";
+const X25519_PRIVATE_KEY =
+  "6f40266e2c9da99ba7e98361d4af4ddb5896e6b407f132f7fcb9853002fd25b2";
 
 const results: { name: string; passed: boolean; details: string }[] = [];
 
-// C.4 contentHash - can verify independently
+// ===== C.2 Signing Key Multibase Encoding =====
+console.log("C.2: Signing Key Multibase Encoding");
+const signingKeyBytes = new Uint8Array(
+  SIGNING_PRIVATE_KEY.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) || [],
+);
+const signingPublicKey = ed25519.getPublicKey(signingKeyBytes);
+const signingPubKeyMultibase = encodeMultibase(
+  ED25519_PREFIX,
+  signingPublicKey,
+);
+const expectedSigningPubKey =
+  "z6Mkg4i8vwbjHJL5MqqzfRWRgUGgR3YTbo2MiG14kskteSyt";
+const c2Passed = signingPubKeyMultibase === expectedSigningPubKey;
+results.push({
+  name: "C.2 Signing Key",
+  passed: c2Passed,
+  details: signingPubKeyMultibase,
+});
+console.log(`  ${c2Passed ? "✓ PASS" : "✗ FAIL"}: ${signingPubKeyMultibase}`);
+console.log();
+
+// ===== C.3 Rotation Key Multibase Encoding =====
+console.log("C.3: Rotation Key Multibase Encoding");
+const rotationKeyBytes = new Uint8Array(
+  ROTATION_PRIVATE_KEY.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) || [],
+);
+const rotationPublicKey = ed25519.getPublicKey(rotationKeyBytes);
+const rotationPubKeyMultibase = encodeMultibase(
+  ED25519_PREFIX,
+  rotationPublicKey,
+);
+const expectedRotationPubKey =
+  "z6MkfxU4sa5RH9hgKHaAZm9X8rBXeCpFNwzh112orPPy24Um";
+const c3Passed = rotationPubKeyMultibase === expectedRotationPubKey;
+results.push({
+  name: "C.3 Rotation Key",
+  passed: c3Passed,
+  details: rotationPubKeyMultibase,
+});
+console.log(`  ${c3Passed ? "✓ PASS" : "✗ FAIL"}: ${rotationPubKeyMultibase}`);
+console.log();
+
+// ===== C.4 contentHash Calculation =====
 console.log("C.4: contentHash Calculation");
 const skillContent = {
   system_prompt: "You are a TypeScript code review expert.",
@@ -43,9 +91,9 @@ const skillContent = {
 
 const canonicalContent = canonicalize(skillContent)!;
 const contentHash = sha256hex(canonicalContent);
-const c4ExpectedHash =
+const expectedContentHash =
   "a34a5a2525cef552d3537bf3b5d13dd04d073339d0a19898f3ed75d8d0b0741e";
-const c4Passed = contentHash === c4ExpectedHash;
+const c4Passed = contentHash === expectedContentHash;
 results.push({
   name: "C.4 contentHash",
   passed: c4Passed,
@@ -54,21 +102,17 @@ results.push({
 console.log(`  ${c4Passed ? "✓ PASS" : "✗ FAIL"}: ${contentHash}`);
 console.log();
 
-// C.5 creatorSig - using the specific private key
+// ===== C.5 creatorSig Calculation =====
 console.log("C.5: creatorSig Calculation");
+const creatorSig = signPayload(contentHash, SIGNING_PRIVATE_KEY);
 const expectedCreatorSig =
   "z51itHZ6xMSRWt4gcbbZSqbyK3Ldajdqex469CQM4hPFqBYFsaCyHEF1RP2ep4QQEgXqauKC6HPAiPeMDE7z9rYJ3";
-const actualCreatorSig = signPayload(contentHash, TEST_PRIVATE_KEY_HEX);
-const c5Passed = actualCreatorSig === expectedCreatorSig;
-results.push({
-  name: "C.5 creatorSig",
-  passed: c5Passed,
-  details: actualCreatorSig,
-});
-console.log(`  ${c5Passed ? "✓ PASS" : "✗ FAIL"}: ${actualCreatorSig}`);
+const c5Passed = creatorSig === expectedCreatorSig;
+results.push({ name: "C.5 creatorSig", passed: c5Passed, details: creatorSig });
+console.log(`  ${c5Passed ? "✓ PASS" : "✗ FAIL"}: ${creatorSig}`);
 console.log();
 
-// C.6 DID Auth - using the same private key
+// ===== C.6 DID Auth Signature Payload =====
 console.log("C.6: DID Auth Signature Payload");
 const testDid = "did:ai:dev:hub:T9alXYnUjX1zw-ANaZiAIG";
 const body = '{"name":"Test Skill"}';
@@ -84,59 +128,53 @@ const authPayload = {
 };
 
 const canonicalAuthPayload = canonicalize(authPayload)!;
+const authSig = signPayload(canonicalAuthPayload, SIGNING_PRIVATE_KEY);
 const expectedAuthSig =
   "z2AfGMQ797NVShEWKQRttRtr2SoQGtneBnAeh78iQmjoXm51M1xyq943JQ9pRbBUhGf6Q7s6nmUUEkSGiqvvg1bBs";
-const actualAuthSig = signPayload(canonicalAuthPayload, TEST_PRIVATE_KEY_HEX);
-const c6Passed = actualAuthSig === expectedAuthSig;
+const c6Passed = authSig === expectedAuthSig;
+results.push({ name: "C.6 DID Auth", passed: c6Passed, details: authSig });
+console.log(`  ${c6Passed ? "✓ PASS" : "✗ FAIL"}: ${authSig}`);
+console.log();
+
+// ===== C.9 X25519 Key (Platform Encryption) =====
+console.log("C.9: X25519 Key (Platform Encryption)");
+const x25519KeyBytes = new Uint8Array(
+  X25519_PRIVATE_KEY.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) || [],
+);
+const x25519PublicKey = x25519.getPublicKey(x25519KeyBytes);
+const x25519PubKeyMultibase = encodeMultibase(X25519_PREFIX, x25519PublicKey);
+const expectedX25519PubKey = "z6LSmMYGUgKMouhtg2CJLfDGrjx7wNyNhZTGD67tgLoPNJru";
+const c9Passed = x25519PubKeyMultibase === expectedX25519PubKey;
 results.push({
-  name: "C.6 DID Auth",
-  passed: c6Passed,
-  details: actualAuthSig,
+  name: "C.9 X25519 Key",
+  passed: c9Passed,
+  details: x25519PubKeyMultibase,
 });
-console.log(`  ${c6Passed ? "✓ PASS" : "✗ FAIL"}: ${actualAuthSig}`);
+console.log(`  ${c9Passed ? "✓ PASS" : "✗ FAIL"}: ${x25519PubKeyMultibase}`);
 console.log();
 
-// Verify the public key matches
-console.log("C.2: Signing Key Multibase Encoding (Verification)");
-const expectedPubKey = "z6Mkg4i8vwbjHJL5MqqzfRWRgUGgR3YTbo2MiG14kskteSyt";
+// ===== C.7 & C.8 require database =====
+// C.1 is random (nanoid) - cannot verify deterministically
 
-// Create a key pair from the specific private key
-const keyBytes = new Uint8Array(
-  TEST_PRIVATE_KEY_HEX.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) ||
-    [],
-);
-
-// Use noble curves to derive public key
-import { ed25519 } from "@noble/curves/ed25519";
-const derivedPublicKey = ed25519.getPublicKey(keyBytes);
-const computedPubKey = encodeMultibase(ED25519_PREFIX, derivedPublicKey);
-
-const c2Passed = computedPubKey === expectedPubKey;
-results.push({
-  name: "C.2 Signing Key",
-  passed: c2Passed,
-  details: computedPubKey,
-});
-console.log(`  ${c2Passed ? "✓ PASS" : "✗ FAIL"}: ${computedPubKey}`);
-console.log();
-
-// Verify full flow - sign and verify
-console.log("=== Verify Complete Flow ===");
-const verificationResult = verifySignature(
-  contentHash,
-  actualCreatorSig,
-  computedPubKey,
-);
-console.log(
-  `Signature verification: ${verificationResult ? "✓ PASS" : "✗ FAIL"}`,
-);
-console.log();
-
-// Summary
-console.log("=== SUMMARY ===");
+console.log("=== Verification Summary ===");
 const passed = results.filter((r) => r.passed).length;
 const total = results.length;
-console.log(`Passed: ${passed}/${total}`);
+console.log(`Passed: ${passed}/${total}\n`);
+
 results.forEach((r) => {
   console.log(`  ${r.passed ? "✓" : "✗"} ${r.name}: ${r.details}`);
 });
+
+console.log("\n=== Unverified (require database or random) ===");
+console.log("  - C.1: Developer DID (nanoid generates random IDs)");
+console.log("  - C.7: DID URL Fragment Resolution (requires DID in database)");
+console.log("  - C.8: Version Query Resolution (requires version in database)");
+
+// Final verification - signature verification
+console.log("\n=== Final Signature Verification ===");
+const signatureValid = verifySignature(
+  contentHash,
+  creatorSig,
+  signingPubKeyMultibase,
+);
+console.log(`creatorSig verification: ${signatureValid ? "✓ PASS" : "✗ FAIL"}`);
