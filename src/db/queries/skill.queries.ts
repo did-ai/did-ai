@@ -118,6 +118,17 @@ export async function findSkillVersionByVersionDid(
   return result.rows[0] ?? null;
 }
 
+export async function findSkillVersionByVersion(
+  familyDid: string,
+  version: string,
+): Promise<SkillVersionRow | null> {
+  const result = await pool.query(
+    "SELECT * FROM skill_versions WHERE family_did = $1 AND version = $2",
+    [familyDid, version],
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function findSkillVersionsByFamily(
   familyDid: string,
 ): Promise<SkillVersionRow[]> {

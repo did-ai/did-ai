@@ -7,6 +7,7 @@ import {
   buildDidDocument,
   buildSkillFamilyService,
   buildSkillVersionService,
+  buildVersionListService,
 } from "../builders/did-document.builder.js";
 import { DidAiError, ErrorCode } from "../errors/index.js";
 import {
@@ -74,6 +75,11 @@ export async function createSkillFamily(params: {
         description: params.description,
         category: params.category,
         tags: params.tags,
+      }),
+      buildVersionListService({
+        familyDid,
+        type: "skill",
+        versions: [],
       }),
     ],
   });

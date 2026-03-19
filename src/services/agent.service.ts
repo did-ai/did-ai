@@ -8,6 +8,7 @@ import {
   buildAgentFamilyService,
   buildAgentVersionService,
   buildAgentProfileService,
+  buildVersionListService,
 } from "../builders/did-document.builder.js";
 import { DidAiError, ErrorCode } from "../errors/index.js";
 import {
@@ -93,6 +94,11 @@ export async function createAgentFamily(params: {
         description: params.description,
         tags: params.tags,
         visibility: params.visibility ?? "public",
+      }),
+      buildVersionListService({
+        familyDid,
+        type: "agent",
+        versions: [],
       }),
     ],
   });

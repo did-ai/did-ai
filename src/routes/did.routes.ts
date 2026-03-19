@@ -3,8 +3,12 @@ import { resolveDid, deactivateDid } from "../services/did.service.js";
 import { didAuthMiddleware } from "../middleware/did-auth.middleware.js";
 
 export async function didRoutes(app: FastifyInstance) {
-  app.get<{ Params: { did: string } }>("/:did", async (req, reply) => {
-    const doc = await resolveDid(req.params.did);
+  app.get<{
+    Params: { did: string };
+    Querystring: { version?: string; service?: string };
+  }>("/:did", async (req, reply) => {
+    const { version, service } = req.query;
+    const doc = await resolveDid(req.params.did, { version, service });
     return reply
       .header("Cache-Control", "max-age=3600")
       .send({ success: true, data: doc });

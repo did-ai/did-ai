@@ -24,6 +24,10 @@ export interface AgentVersionRow {
   version: string;
   bump_type: string;
   previous_version_did: string | null;
+  input_schema: object | null;
+  output_schema: object | null;
+  tool_declarations: object | null;
+  execution_mode: string;
   skill_bindings: object[];
   orchestration_mode: string;
   orchestration_flow: object | null;
@@ -34,6 +38,7 @@ export interface AgentVersionRow {
   review_status: string;
   content_hash: string;
   creator_sig: string;
+  content_plaintext: object | null;
   degraded_since: Date | null;
   deprecated_since: Date | null;
   created_at: Date;
@@ -124,6 +129,17 @@ export async function findAgentVersionByVersionDid(
   const result = await pool.query(
     "SELECT * FROM agent_versions WHERE version_did = $1",
     [versionDid],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function findAgentVersionByVersion(
+  familyDid: string,
+  version: string,
+): Promise<AgentVersionRow | null> {
+  const result = await pool.query(
+    "SELECT * FROM agent_versions WHERE family_did = $1 AND version = $2",
+    [familyDid, version],
   );
   return result.rows[0] ?? null;
 }

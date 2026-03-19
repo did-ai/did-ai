@@ -28,6 +28,8 @@ export const ERROR_STATUS: Partial<Record<ErrorCode, number>> = {
   [ErrorCode.INVALID_SIGNATURE]: 401,
   [ErrorCode.TIMESTAMP_EXPIRED]: 401,
   [ErrorCode.NONCE_REPLAYED]: 401,
+  [ErrorCode.FAMILY_NOT_FOUND]: 404,
+  [ErrorCode.VERSION_NOT_FOUND]: 404,
   [ErrorCode.RATE_LIMITED]: 429,
   [ErrorCode.KEY_SEPARATION_VIOLATION]: 400,
   [ErrorCode.AGENT_NOT_CALLABLE]: 400,

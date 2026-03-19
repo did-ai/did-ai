@@ -64,7 +64,7 @@ export function buildDeveloperProfileService(
   return {
     id: `${params.did}#profile`,
     type: "DeveloperProfile",
-    serviceEndpoint: `https://did-ai.io/dev/${params.shortId}/profile`,
+    serviceEndpoint: `https://did-ai.io/dev/hub/${params.shortId}/profile`,
     displayName: params.displayName,
     bio: params.bio,
     links: params.links,
@@ -82,7 +82,7 @@ export function buildPublishedAssetsService(
   return {
     id: `${params.did}#published`,
     type: "PublishedAssets",
-    serviceEndpoint: `https://did-ai.io/dev/${params.shortId}/assets`,
+    serviceEndpoint: `https://did-ai.io/dev/hub/${params.shortId}/assets`,
   };
 }
 
@@ -99,9 +99,11 @@ export interface SkillFamilyServiceParams {
 export function buildSkillFamilyService(
   params: SkillFamilyServiceParams,
 ): object {
+  const shortId = params.familyDid.split(":").pop()!;
   return {
     id: `${params.familyDid}#family`,
     type: "SkillFamily",
+    serviceEndpoint: `https://did-ai.io/skills/hub/${shortId}`,
     name: params.name,
     description: params.description,
     category: params.category,
@@ -155,9 +157,11 @@ export interface AgentFamilyServiceParams {
 export function buildAgentFamilyService(
   params: AgentFamilyServiceParams,
 ): object {
+  const shortId = params.familyDid.split(":").pop()!;
   return {
     id: `${params.familyDid}#family`,
     type: "AgentFamily",
+    serviceEndpoint: `https://did-ai.io/agents/hub/${shortId}`,
     name: params.name,
     description: params.description,
     tags: params.tags ?? [],
@@ -232,5 +236,40 @@ export function buildAgentProfileService(
     tags: params.tags ?? [],
     visibility: params.visibility,
     capabilities: params.capabilities,
+  };
+}
+
+export interface VersionEntry {
+  version: string;
+  status: "active" | "degraded" | "deprecated";
+  contentHash: string;
+  creatorSig: string;
+  inputSchema?: object;
+  outputSchema?: object;
+  executionMode?: string;
+  toolDeclarations?: object[];
+  skillBindings?: SkillBinding[];
+  orchestrationMode?: string;
+  orchestrationFlow?: object;
+  aggregatedTools?: object[];
+}
+
+export interface VersionListServiceParams {
+  familyDid: string;
+  type: "skill" | "agent";
+  versions: VersionEntry[];
+}
+
+export function buildVersionListService(
+  params: VersionListServiceParams,
+): object {
+  const shortId = params.familyDid.split(":").pop()!;
+  const type = params.type;
+
+  return {
+    id: `${params.familyDid}#versions`,
+    type: "VersionList",
+    serviceEndpoint: `https://did-ai.io/${type}s/hub/${shortId}/versions`,
+    versions: params.versions,
   };
 }
