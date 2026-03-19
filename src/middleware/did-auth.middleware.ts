@@ -1,10 +1,10 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import canonicalize from "canonicalize";
-import { redis } from "../config/redis";
-import { pool } from "../config/database";
-import { verifySignature } from "../crypto/signing";
-import { sha256hex } from "../crypto/keys";
-import { DidAiError, ErrorCode } from "../errors";
+import { redis } from "../config/redis.js";
+import { pool } from "../config/database.js";
+import { verifySignature } from "../crypto/signing.js";
+import { sha256hex } from "../crypto/keys.js";
+import { DidAiError, ErrorCode } from "../errors/index.js";
 
 interface DIDAuthHeader {
   did: string;

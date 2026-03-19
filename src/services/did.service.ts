@@ -1,14 +1,14 @@
-import { pool } from "../config/database";
-import { redis } from "../config/redis";
-import { CACHE_TTL } from "../config/cache-ttl";
+import { pool } from "../config/database.js";
+import { redis } from "../config/redis.js";
+import { CACHE_TTL } from "../config/cache-ttl.js";
 import {
   buildDidDocument,
   buildDeveloperProfileService,
   buildPublishedAssetsService,
-} from "../builders/did-document.builder";
-import { generateDid } from "../crypto/keys";
-import { DidAiError, ErrorCode } from "../errors";
-import { validateKeySeparation } from "../validators/constraints";
+} from "../builders/did-document.builder.js";
+import { generateDid } from "../crypto/keys.js";
+import { DidAiError, ErrorCode } from "../errors/index.js";
+import { validateKeySeparation } from "../validators/constraints.js";
 
 export async function resolveDid(did: string): Promise<object> {
   const cacheKey = `did:resolve:${did}`;

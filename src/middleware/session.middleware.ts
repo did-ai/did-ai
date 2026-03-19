@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { pool } from "../config/database";
-import { DidAiError, ErrorCode } from "../errors";
+import { pool } from "../config/database.js";
+import { DidAiError, ErrorCode } from "../errors/index.js";
 
 export async function sessionMiddleware(
   req: FastifyRequest,

@@ -10,10 +10,12 @@ const REQUIRED_ENV_VARS = [
   "POSTGRES_DB",
   "REDIS_HOST",
   "REDIS_PORT",
-  "REDIS_PASSWORD",
 ] as const;
 
-function generateSecretIfNeeded(_key: string, value: string | undefined): string {
+function generateSecretIfNeeded(
+  _key: string,
+  value: string | undefined,
+): string {
   if (value && value !== "change_me_in_production") {
     return value;
   }
@@ -43,7 +45,8 @@ export const config = {
   redis: {
     host: getEnv("REDIS_HOST"),
     port: parseInt(getEnv("REDIS_PORT"), 10),
-    password: getEnv("REDIS_PASSWORD"),
+    username: process.env.REDIS_USERNAME,
+    password: process.env.REDIS_PASSWORD,
   },
 
   jwtSecret: generateSecretIfNeeded("JWT_SECRET", process.env.JWT_SECRET),

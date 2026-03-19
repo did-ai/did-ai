@@ -1,6 +1,6 @@
 import { ed25519 } from "@noble/curves/ed25519";
 import { hexToBytes } from "@noble/hashes/utils";
-import { encode58, decode58 } from "./base58";
+import { encode58, decode58 } from "./base58.js";
 
 export function signPayload(payload: string, privateKeyHex: string): string {
   const msgBytes = new TextEncoder().encode(payload);

@@ -1,4 +1,4 @@
-import { DidAiError, ErrorCode } from "../errors";
+import { DidAiError, ErrorCode } from "../errors/index.js";
 
 interface DIDDocument {
   verificationMethod?: Array<{

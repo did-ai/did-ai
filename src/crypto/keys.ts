@@ -3,7 +3,7 @@ import { x25519 } from "@noble/curves/ed25519";
 import { nanoid } from "nanoid";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex } from "@noble/hashes/utils";
-import { encode58 } from "./base58";
+import { encode58 } from "./base58.js";
 
 const ED25519_PREFIX = new Uint8Array([0xed, 0x01]);
 const X25519_PREFIX = new Uint8Array([0xec, 0x01]);
