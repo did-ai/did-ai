@@ -55,11 +55,11 @@ test_endpoint() {
     
     if [ "$status_code" = "$expected_status" ]; then
         echo "✓ PASS (HTTP $status_code)"
-        ((PASSED++))
+        PASSED=$((PASSED + 1))
     else
         echo "✗ FAIL (Expected $expected_status, got $status_code)"
         echo "  Response: ${body:0:200}"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
     fi
 }
 
