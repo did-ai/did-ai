@@ -119,7 +119,7 @@ export interface SkillVersionServiceParams {
   version: string;
   bumpType: "patch" | "minor" | "major";
   status: string;
-  previousVersionDid?: string;
+  previousVersion?: string;
   inputSchema: object;
   outputSchema: object;
   contentHash: string;
@@ -136,7 +136,7 @@ export function buildSkillVersionService(
     version: params.version,
     bumpType: params.bumpType,
     status: params.status,
-    previousVersionDid: params.previousVersionDid,
+    previousVersion: params.previousVersion,
     inputSchema: params.inputSchema,
     outputSchema: params.outputSchema,
     contentHash: params.contentHash,
@@ -177,7 +177,7 @@ export interface AgentVersionServiceParams {
   version: string;
   bumpType: string;
   status: string;
-  previousVersionDid?: string;
+  previousVersion?: string;
   skillBindings: SkillBinding[];
   orchestrationMode: "standalone" | "barn_role";
   orchestrationFlow?: object;
@@ -203,7 +203,7 @@ export function buildAgentVersionService(
     version: params.version,
     bumpType: params.bumpType,
     status: params.status,
-    previousVersionDid: params.previousVersionDid,
+    previousVersion: params.previousVersion,
     skillBindings: params.skillBindings,
     orchestrationMode: params.orchestrationMode,
     orchestrationFlow: params.orchestrationFlow,
@@ -242,6 +242,7 @@ export function buildAgentProfileService(
 export interface VersionEntry {
   version: string;
   status: "active" | "degraded" | "deprecated";
+  previousVersion?: string;
   contentHash: string;
   creatorSig: string;
   inputSchema?: object;

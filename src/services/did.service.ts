@@ -10,6 +10,7 @@ import { generateDid } from "../crypto/keys.js";
 import { DidAiError, ErrorCode } from "../errors/index.js";
 import { validateKeySeparation } from "../validators/constraints.js";
 import { parseDidUrl } from "../utils/did-url.js";
+import { isReservedNamespace } from "../config/namespaces.js";
 import {
   findSkillFamilyByFamilyDid,
   findSkillVersionByVersion,
@@ -301,6 +302,13 @@ export async function createDeveloperDid(params: {
   bio?: string;
   links?: Record<string, string>;
 }): Promise<{ did: string; document: object }> {
+  if (isReservedNamespace(params.namespace)) {
+    throw new DidAiError(
+      ErrorCode.NAMESPACE_RESERVED,
+      `Namespace '${params.namespace}' is reserved`,
+    );
+  }
+
   const did = generateDid("dev", params.namespace);
   const shortId = did.split(":").pop()!;
 

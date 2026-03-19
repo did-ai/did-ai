@@ -11,6 +11,7 @@ import {
   buildVersionListService,
 } from "../builders/did-document.builder.js";
 import { DidAiError, ErrorCode } from "../errors/index.js";
+import { isReservedNamespace } from "../config/namespaces.js";
 import {
   findAgentFamilyByFamilyDid,
   updateAgentFamilyLatestVersion,
@@ -80,6 +81,13 @@ export async function createAgentFamily(params: {
   visibility?: "public" | "unlisted" | "private";
   namespace: string;
 }): Promise<{ familyDid: string }> {
+  if (isReservedNamespace(params.namespace)) {
+    throw new DidAiError(
+      ErrorCode.NAMESPACE_RESERVED,
+      `Namespace '${params.namespace}' is reserved`,
+    );
+  }
+
   const familyDid = generateDid("agent", params.namespace);
   const shortId = familyDid.split(":").pop()!;
 
@@ -195,6 +203,7 @@ export async function publishAgentVersion(params: {
   const shortId = versionDid.split(":").pop()!;
 
   const prevVersion = await findActiveAgentVersion(params.familyDid);
+  const previousVersion = prevVersion?.version ?? null;
   const previousVersionDid = prevVersion?.version_did ?? null;
 
   const document = buildDidDocument({
@@ -208,7 +217,7 @@ export async function publishAgentVersion(params: {
         version: params.version,
         bumpType: params.bumpType,
         status: "active",
-        previousVersionDid: previousVersionDid ?? undefined,
+        previousVersion: previousVersion ?? undefined,
         skillBindings: params.content.skill_bindings,
         orchestrationMode: params.content.orchestration_mode,
         orchestrationFlow: params.content.orchestration_flow,

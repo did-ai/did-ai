@@ -10,6 +10,7 @@ import {
   buildVersionListService,
 } from "../builders/did-document.builder.js";
 import { DidAiError, ErrorCode } from "../errors/index.js";
+import { isReservedNamespace } from "../config/namespaces.js";
 import {
   findSkillFamilyByFamilyDid,
   updateSkillFamilyLatestVersion,
@@ -61,6 +62,13 @@ export async function createSkillFamily(params: {
   tags?: string[];
   namespace: string;
 }): Promise<{ familyDid: string }> {
+  if (isReservedNamespace(params.namespace)) {
+    throw new DidAiError(
+      ErrorCode.NAMESPACE_RESERVED,
+      `Namespace '${params.namespace}' is reserved`,
+    );
+  }
+
   const familyDid = generateDid("skill", params.namespace);
   const shortId = familyDid.split(":").pop()!;
 
@@ -174,6 +182,7 @@ export async function publishSkillVersion(params: {
   const shortId = versionDid.split(":").pop()!;
 
   const prevVersion = await findActiveSkillVersion(params.familyDid);
+  const previousVersion = prevVersion?.version ?? null;
   const previousVersionDid = prevVersion?.version_did ?? null;
 
   const document = buildDidDocument({
@@ -187,7 +196,7 @@ export async function publishSkillVersion(params: {
         version: params.version,
         bumpType: params.bumpType,
         status: "active",
-        previousVersionDid: previousVersionDid ?? undefined,
+        previousVersion: previousVersion ?? undefined,
         inputSchema: params.content.input_schema,
         outputSchema: params.content.output_schema,
         contentHash,

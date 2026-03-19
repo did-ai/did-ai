@@ -90,12 +90,13 @@ export async function didAuthMiddleware(
   }
 
   const body = (req.body as string | object | undefined) ?? "";
+  const path = req.url.split("?")[0];
   const payload = canonicalize({
     did,
     nonce,
     timestamp,
     method: req.method,
-    path: req.url,
+    path,
     bodyHash: sha256hex(typeof body === "string" ? body : JSON.stringify(body)),
   })!;
 
