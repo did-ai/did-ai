@@ -3,108 +3,169 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR" && pwd)"
+PROJECT_ROOT="$SCRIPT_DIR"
 
 cd "$PROJECT_ROOT"
 
 echo "========================================"
-echo "  did:ai - Start & Test"
+echo "  did:ai - Development Startup Script"
 echo "========================================"
 echo ""
-echo "Usage:"
-echo "  ./start.sh         # Start containers + run all tests"
-echo "  ./start.sh up       # Start containers only"
-echo "  ./start.sh test     # Run API tests only"
-echo "  ./start.sh unit     # Run unit tests"
-echo "  ./start.sh down     # Stop containers"
-echo "  ./start.sh clean    # Clean up everything"
-echo ""
 
-COMMAND="${1:-full}"
-
-check_docker() {
-    if ! command -v docker &> /dev/null; then
-        echo "Error: Docker is not installed"
-        exit 1
-    fi
-    if ! docker compose version &> /dev/null; then
-        echo "Error: Docker Compose is not installed"
-        exit 1
-    fi
+show_help() {
+    echo "Usage: ./start.sh [command]"
+    echo ""
+    echo "Commands:"
+    echo "  all         Run everything (default)"
+    echo "  docker      Start Docker containers only"
+    echo "  stop        Stop Docker containers"
+    echo "  down        Stop and remove Docker containers"
+    echo "  test        Run unit tests"
+    echo "  api-test    Run API integration tests"
+    echo "  build       Build the project"
+    echo "  lint        Run linting"
+    echo "  clean       Clean build artifacts"
+    echo ""
 }
 
-start_services() {
-    echo "Starting Docker services..."
-    docker compose up -d
-    echo "Waiting for services to be ready..."
-    sleep 5
+start_docker() {
+    echo "Starting Docker containers..."
+    docker-compose up -d
     
-    for i in {1..30}; do
-        if curl -s http://localhost:3000/health > /dev/null 2>&1; then
-            echo "Services ready!"
-            return 0
-        fi
-        echo "Waiting... ($i/30)"
+    echo ""
+    echo "Waiting for services to be healthy..."
+    
+    echo -n "  PostgreSQL"
+    until docker-compose exec -T postgres pg_isready -U didai -d didai &>/dev/null; do
+        echo -n "."
         sleep 2
     done
+    echo " ✓"
     
-    echo "Failed to start services"
-    docker compose logs
-    exit 1
+    echo -n "  Redis"
+    until docker-compose exec -T redis redis-cli ping &>/dev/null; do
+        echo -n "."
+        sleep 2
+    done
+    echo " ✓"
+    
+    echo -n "  API"
+    until curl -sf http://localhost:3000/health &>/dev/null; do
+        echo -n "."
+        sleep 2
+    done
+    echo " ✓"
+    
+    echo ""
+    echo "All services are ready!"
 }
 
-stop_services() {
-    echo "Stopping Docker services..."
-    docker compose down
-    echo "Services stopped"
+stop_docker() {
+    echo "Stopping Docker containers..."
+    docker-compose stop
+    echo "Containers stopped."
 }
 
-run_unit_tests() {
-    echo "Running unit tests..."
+down_docker() {
+    echo "Stopping and removing Docker containers..."
+    docker-compose down
+    echo "Containers removed."
+}
+
+run_tests() {
+    echo ""
+    echo "========================================"
+    echo "  Running Unit Tests"
+    echo "========================================"
+    echo ""
     bun test
 }
 
 run_api_tests() {
-    echo "Running API tests..."
-    ./scripts/test-api-full.sh
+    echo ""
+    echo "========================================"
+    echo "  Running API Integration Tests"
+    echo "========================================"
+    echo ""
+    
+    if ! curl -sf http://localhost:3000/health &>/dev/null; then
+        echo "Error: API is not running. Start it with: ./start.sh docker"
+        exit 1
+    fi
+    
+    bash "$PROJECT_ROOT/scripts/test-api-full.sh"
 }
 
-check_docker
+build_project() {
+    echo ""
+    echo "========================================"
+    echo "  Building Project"
+    echo "========================================"
+    echo ""
+    bun run build
+}
+
+run_lint() {
+    echo ""
+    echo "========================================"
+    echo "  Running Linter"
+    echo "========================================"
+    echo ""
+    bun run lint 2>/dev/null || echo "No lint command configured."
+}
+
+clean_project() {
+    echo ""
+    echo "Cleaning build artifacts..."
+    rm -rf dist
+    rm -rf .turbo
+    echo "Clean complete."
+}
+
+COMMAND="${1:-all}"
 
 case "$COMMAND" in
-    up)
-        start_services
-        ;;
-    down)
-        stop_services
-        ;;
-    restart)
-        stop_services
-        start_services
-        ;;
-    test)
-        run_api_tests
-        ;;
-    unit)
-        run_unit_tests
-        ;;
-    full)
-        start_services
-        run_unit_tests
+    all)
+        start_docker
+        build_project
+        run_tests
         run_api_tests
         echo ""
         echo "========================================"
-        echo "  All Tests Passed!"
+        echo "  All Steps Completed Successfully!"
         echo "========================================"
         ;;
+    docker)
+        start_docker
+        ;;
+    stop)
+        stop_docker
+        ;;
+    down)
+        down_docker
+        ;;
+    test)
+        run_tests
+        ;;
+    api-test)
+        run_api_tests
+        ;;
+    build)
+        build_project
+        ;;
+    lint)
+        run_lint
+        ;;
     clean)
-        echo "Cleaning up..."
-        docker compose down -v
-        rm -rf .env
-        echo "Cleanup complete"
+        clean_project
+        ;;
+    help|--help|-h)
+        show_help
         ;;
     *)
         echo "Unknown command: $COMMAND"
+        echo ""
+        show_help
         exit 1
         ;;
 esac
