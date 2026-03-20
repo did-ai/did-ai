@@ -1,12 +1,19 @@
 import { DidAiError, ErrorCode } from "../errors/index.js";
 
+interface VerificationMethod {
+  id: string;
+  type: string;
+  controller: string;
+  publicKeyMultibase: string;
+}
+
 interface DIDDocument {
-  verificationMethod?: Array<{
-    id: string;
-    type: string;
-    keyAgreement?: string[];
-    assertionMethod?: string[];
-  }>;
+  verificationMethod?: VerificationMethod[];
+  assertionMethod?: string[];
+  authentication?: string[];
+  capabilityInvocation?: string[];
+  capabilityDelegation?: string[];
+  keyAgreement?: string[];
   service?: Array<{ type: string; [key: string]: unknown }>;
 }
 
@@ -17,40 +24,93 @@ interface SkillBinding {
   role: string;
 }
 
-const KEY_SEPARATION = {
-  assertionMethod: ["Ed25519VerificationKey2020"] as const,
-  keyAgreement: ["X25519KeyAgreementKey2020"] as const,
-} as const;
-
 export function validateKeySeparation(doc: DIDDocument): void {
   if (!doc.verificationMethod) return;
 
+  const vmIds = new Set<string>();
+
   for (const vm of doc.verificationMethod) {
-    const keyType = vm.type;
-
-    if (
-      vm.assertionMethod?.length &&
-      !(KEY_SEPARATION.assertionMethod as readonly string[]).includes(keyType)
-    ) {
+    if (vmIds.has(vm.id)) {
       throw new DidAiError(
-        ErrorCode.KEY_SEPARATION_VIOLATION,
-        `Key ${vm.id} in assertionMethod must be Ed25519, got ${keyType}`,
+        ErrorCode.INVALID_DID_DOCUMENT,
+        `Duplicate VM id: ${vm.id}`,
       );
     }
+    vmIds.add(vm.id);
 
-    if (
-      vm.keyAgreement?.length &&
-      !(KEY_SEPARATION.keyAgreement as readonly string[]).includes(keyType)
-    ) {
-      throw new DidAiError(
-        ErrorCode.KEY_SEPARATION_VIOLATION,
-        `Key ${vm.id} in keyAgreement must be X25519, got ${keyType}`,
+    if (vm.type === "Ed25519VerificationKey2020") {
+      const isInKeyAgreement = doc.keyAgreement?.some(
+        (ref) =>
+          ref === vm.id ||
+          ref ===
+            `${doc.verificationMethod?.find((v) => v.id === vm.id)?.controller}#encryption-key`,
       );
+      if (isInKeyAgreement) {
+        throw new DidAiError(
+          ErrorCode.KEY_SEPARATION_VIOLATION,
+          `Ed25519 key ${vm.id} must not be in keyAgreement`,
+        );
+      }
     }
+
+    if (vm.type === "X25519KeyAgreementKey2020") {
+      const isInSigningRole =
+        doc.assertionMethod?.some((ref) => ref === vm.id) ||
+        doc.authentication?.some((ref) => ref === vm.id) ||
+        doc.capabilityInvocation?.some((ref) => ref === vm.id);
+
+      if (isInSigningRole) {
+        throw new DidAiError(
+          ErrorCode.KEY_SEPARATION_VIOLATION,
+          `X25519 key ${vm.id} must not be in assertionMethod/authentication/capabilityInvocation`,
+        );
+      }
+    }
+  }
+
+  const signingKey = doc.verificationMethod?.find((vm) =>
+    doc.assertionMethod?.includes(vm.id),
+  );
+  const rotationKey = doc.verificationMethod?.find((vm) =>
+    doc.capabilityInvocation?.includes(vm.id),
+  );
+
+  if (
+    signingKey &&
+    rotationKey &&
+    signingKey.publicKeyMultibase === rotationKey.publicKeyMultibase
+  ) {
+    throw new DidAiError(
+      ErrorCode.KEY_SEPARATION_VIOLATION,
+      "Signing Key and Rotation Key must be distinct",
+    );
+  }
+}
+
+export function validateSkillAgentConstraints(doc: DIDDocument): void {
+  if (doc.verificationMethod?.length) {
+    throw new DidAiError(
+      ErrorCode.INVALID_DID_DOCUMENT,
+      "Skill/Agent DID must not contain verificationMethod",
+    );
+  }
+
+  if (
+    doc.assertionMethod?.length ||
+    doc.authentication?.length ||
+    doc.capabilityInvocation?.length ||
+    doc.keyAgreement?.length
+  ) {
+    throw new DidAiError(
+      ErrorCode.INVALID_DID_DOCUMENT,
+      "Skill/Agent DID must not contain verification relationships",
+    );
   }
 }
 
 export function validateAgentConstraints(doc: DIDDocument): void {
+  validateSkillAgentConstraints(doc);
+
   const services = doc.service ?? [];
   const serviceTypes = services.map((s) => s.type);
 

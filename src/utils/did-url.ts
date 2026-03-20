@@ -1,3 +1,11 @@
+export type SubjectType = "dev" | "skill" | "agent";
+
+export interface DidUrlComponents {
+  networkId: string;
+  subjectType: SubjectType;
+  uniqueId: string;
+}
+
 export interface DidUrlQuery {
   version?: string;
   service?: string;
@@ -5,10 +13,14 @@ export interface DidUrlQuery {
 
 export interface DidUrlResult {
   did: string;
+  components: DidUrlComponents;
   path?: string;
   query: DidUrlQuery;
   fragment?: string;
 }
+
+const DID_PATTERN =
+  /^did:ai:([a-z0-9][a-z0-9-]{0,30}[a-z0-9]):(dev|skill|agent):([A-Za-z0-9]+)$/;
 
 export function parseDidUrl(didUrl: string): DidUrlResult {
   let url = didUrl;
@@ -38,7 +50,9 @@ export function parseDidUrl(didUrl: string): DidUrlResult {
     }
   }
 
-  const pathMatch = url.match(/^(did:ai:[a-z]+:[a-z]+:[A-Za-z0-9]+)\/(.+)$/);
+  const pathMatch = url.match(
+    /^(did:ai:[a-z0-9-]+:[dev|skill|agent]:[A-Za-z0-9]+)\/(.+)$/,
+  );
   let path: string | undefined;
   let did: string = url;
 
@@ -47,8 +61,20 @@ export function parseDidUrl(didUrl: string): DidUrlResult {
     path = pathMatch[2] ?? undefined;
   }
 
+  const match = did.match(DID_PATTERN);
+  if (!match) {
+    throw new Error(`Invalid DID format: ${did}`);
+  }
+
+  const [, networkId = "", subjectType = "dev", uniqueId = ""] = match;
+
   return {
     did,
+    components: {
+      networkId,
+      subjectType: subjectType as SubjectType,
+      uniqueId,
+    },
     path,
     query,
     fragment,
@@ -56,5 +82,8 @@ export function parseDidUrl(didUrl: string): DidUrlResult {
 }
 
 export function isVersionedDid(did: string): boolean {
-  return did.startsWith("did:ai:skill:") || did.startsWith("did:ai:agent:");
+  return (
+    did.startsWith("did:ai:") &&
+    (did.includes(":skill:") || did.includes(":agent:"))
+  );
 }

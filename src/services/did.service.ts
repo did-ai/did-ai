@@ -6,11 +6,16 @@ import {
   buildDeveloperProfileService,
   buildPublishedAssetsService,
 } from "../builders/did-document.builder.js";
-import { generateDid } from "../crypto/keys.js";
+import { generateDid, decodeMultibase } from "../crypto/keys.js";
+import { verifySaid } from "../crypto/said.js";
 import { DidAiError, ErrorCode } from "../errors/index.js";
-import { validateKeySeparation } from "../validators/constraints.js";
+import {
+  validateKeySeparation,
+  validateSkillAgentConstraints,
+} from "../validators/constraints.js";
 import { parseDidUrl } from "../utils/did-url.js";
 import { isReservedNamespace } from "../config/namespaces.js";
+import { buildResolutionResult } from "../types/resolution.js";
 import {
   findSkillFamilyByFamilyDid,
   findSkillVersionByVersion,
@@ -26,85 +31,123 @@ export interface ResolveDidOptions {
   fragment?: string;
 }
 
-export async function resolveDid(
-  did: string,
-  options: ResolveDidOptions = {},
-): Promise<object> {
+export async function resolveDid(did: string, options: ResolveDidOptions = {}) {
   const parsed = parseDidUrl(did);
   const cleanDid = parsed.did;
   const queryVersion = options.version ?? parsed.query.version;
   const queryService = options.service ?? parsed.query.service;
   const queryFragment = options.fragment ?? parsed.fragment;
-  const cacheKey = `did:resolve:${cleanDid}`;
-
-  const cached = await redis.get(cacheKey);
-  if (cached && !queryVersion && !queryFragment) {
-    return JSON.parse(cached);
-  }
 
   const result = await pool.query(
-    `SELECT document, status, type, created_at, updated_at FROM did_documents WHERE did = $1`,
+    `SELECT document, status, type, created_at, updated_at, version_num 
+     FROM did_documents WHERE did = $1`,
     [cleanDid],
   );
+
   if (!result.rows[0]) {
-    throw new DidAiError(ErrorCode.DID_NOT_FOUND, `DID not found: ${cleanDid}`);
-  }
-  if (result.rows[0].status === "deactivated") {
-    throw new DidAiError(ErrorCode.DID_DEACTIVATED, "DID is deactivated");
-  }
-
-  const doc = result.rows[0].document as {
-    service?: object[];
-    verificationMethod?: object[];
-    created?: string;
-    updated?: string;
-  };
-  const didType = result.rows[0].type;
-
-  if (queryVersion && didType === "skill") {
-    const versionInfo = await resolveSkillVersionInfo(cleanDid, queryVersion);
-    return versionInfo;
+    return buildResolutionResult(null, "", "", false, {
+      error: "notFound",
+    });
   }
 
-  if (queryVersion && didType === "agent") {
-    const versionInfo = await resolveAgentVersionInfo(cleanDid, queryVersion);
-    return versionInfo;
+  const doc = result.rows[0].document as Record<string, unknown>;
+  const status = result.rows[0].status;
+  const createdAt = result.rows[0].created_at;
+  const updatedAt = result.rows[0].updated_at;
+  const versionNum = result.rows[0].version_num;
+
+  if (status === "deactivated") {
+    return buildResolutionResult(null, createdAt, updatedAt, true, {
+      versionId: versionNum?.toString(),
+      error: "deactivated",
+    });
+  }
+
+  const subjectType = parsed.components.subjectType;
+  if (subjectType === "dev") {
+    const vm = doc.verificationMethod as
+      | Array<{
+          id: string;
+          publicKeyMultibase: string;
+        }>
+      | undefined;
+    const assertionMethod = doc.assertionMethod as string[] | undefined;
+    const signingKey = vm?.find((v) => assertionMethod?.includes(v.id));
+
+    if (signingKey) {
+      const pubKeyBytes = decodeMultibase(signingKey.publicKeyMultibase);
+      const uniqueId = parsed.components.uniqueId;
+      if (!verifySaid(pubKeyBytes, uniqueId)) {
+        return buildResolutionResult(null, "", "", false, {
+          error: "saidMismatch",
+        });
+      }
+    }
+  }
+
+  if (queryVersion) {
+    const didType = result.rows[0].type;
+    if (didType === "skill") {
+      const versionInfo = await resolveSkillVersionInfo(cleanDid, queryVersion);
+      return buildResolutionResult(versionInfo, createdAt, updatedAt, false, {
+        versionId: versionNum?.toString(),
+      });
+    }
+    if (didType === "agent") {
+      const versionInfo = await resolveAgentVersionInfo(cleanDid, queryVersion);
+      return buildResolutionResult(versionInfo, createdAt, updatedAt, false, {
+        versionId: versionNum?.toString(),
+      });
+    }
   }
 
   if (queryService) {
-    const service = doc.service?.find(
-      (s: object) => (s as { id?: string }).id === queryService,
-    );
+    const services = doc.service as Array<{ id?: string }> | undefined;
+    const service = services?.find((s) => s.id === queryService);
     if (service) {
-      return {
-        serviceEndpoint: (service as { serviceEndpoint?: string })
-          .serviceEndpoint,
-      };
+      const serviceEndpoint = (service as { serviceEndpoint?: string })
+        .serviceEndpoint;
+      return buildResolutionResult(
+        { serviceEndpoint },
+        createdAt,
+        updatedAt,
+        false,
+        { versionId: versionNum?.toString() },
+      );
     }
   }
 
   if (queryFragment) {
     const fragmentId = `${cleanDid}#${queryFragment}`;
-    if (doc.verificationMethod) {
-      const vm = (doc.verificationMethod as object[]).find(
-        (m: object) => (m as { id?: string }).id === fragmentId,
-      );
-      if (vm) return vm;
+    const vm = doc.verificationMethod as Array<{ id?: string }> | undefined;
+    const vmEntry = vm?.find((m) => m.id === fragmentId);
+    if (vmEntry) {
+      return buildResolutionResult(vmEntry, createdAt, updatedAt, false, {
+        versionId: versionNum?.toString(),
+      });
     }
-    const service = doc.service?.find(
-      (s: object) => (s as { id?: string }).id === fragmentId,
-    );
-    if (service) return service;
+    const services = doc.service as Array<{ id?: string }> | undefined;
+    const serviceEntry = services?.find((s) => s.id === fragmentId);
+    if (serviceEntry) {
+      return buildResolutionResult(serviceEntry, createdAt, updatedAt, false, {
+        versionId: versionNum?.toString(),
+      });
+    }
   }
 
+  const cacheKey = `did:resolve:${cleanDid}`;
   await redis.setex(cacheKey, CACHE_TTL.DID_RESOLVE, JSON.stringify(doc));
-  return doc;
+
+  return buildResolutionResult(doc, createdAt, updatedAt, false, {
+    versionId: versionNum?.toString(),
+    contentType: "application/did+ld+json",
+  });
 }
 
 async function resolveSkillVersionInfo(
   familyDid: string,
   version: string,
-): Promise<object> {
+): Promise<Record<string, unknown>> {
   const versionRow = await findSkillVersionByVersion(familyDid, version);
 
   if (!versionRow) {
@@ -163,7 +206,7 @@ async function resolveSkillVersionInfo(
 async function resolveAgentVersionInfo(
   familyDid: string,
   version: string,
-): Promise<object> {
+): Promise<Record<string, unknown>> {
   const versionRow = await findAgentVersionByVersion(familyDid, version);
 
   if (!versionRow) {
@@ -253,19 +296,14 @@ export async function deactivateDid(
     );
   }
 
-  const doc = result.rows[0].document;
-  const controller = (doc as { controller?: string }).controller;
+  const doc = result.rows[0].document as Record<string, unknown>;
+  const controller = doc.controller as string | undefined;
   if (controller !== callerDid) {
     throw new DidAiError(
       ErrorCode.AUTH_REQUIRED,
       "Only the controller can deactivate a DID",
     );
   }
-
-  const updatedDoc = {
-    ...doc,
-    deactivated: true,
-  };
 
   const client = await pool.connect();
   try {
@@ -274,7 +312,7 @@ export async function deactivateDid(
       `UPDATE did_documents
        SET status = 'deactivated', document = $1, updated_at = now()
        WHERE did = $2`,
-      [JSON.stringify(updatedDoc), did],
+      [JSON.stringify({ ...doc, deactivated: true }), did],
     );
     await client.query(
       `INSERT INTO did_versions (did_id, did, version_num, document, changed_by)
@@ -297,20 +335,21 @@ export async function deactivateDid(
 export async function createDeveloperDid(params: {
   signingKeyMultibase: string;
   rotationKeyMultibase: string;
-  namespace: string;
+  encryptionKeyMultibase?: string;
+  networkId: string;
   displayName: string;
   bio?: string;
   links?: Record<string, string>;
-}): Promise<{ did: string; document: object }> {
-  if (isReservedNamespace(params.namespace)) {
+}): Promise<{ did: string; document: Record<string, unknown> }> {
+  if (isReservedNamespace(params.networkId)) {
     throw new DidAiError(
       ErrorCode.NAMESPACE_RESERVED,
-      `Namespace '${params.namespace}' is reserved`,
+      `Namespace '${params.networkId}' is reserved`,
     );
   }
 
-  const did = generateDid("dev", params.namespace);
-  const shortId = did.split(":").pop()!;
+  const did = generateDid("dev", params.networkId, params.signingKeyMultibase);
+  const uniqueId = did.split(":").pop()!;
 
   const document = buildDidDocument({
     did,
@@ -318,17 +357,18 @@ export async function createDeveloperDid(params: {
     controller: did,
     signingKeyMultibase: params.signingKeyMultibase,
     rotationKeyMultibase: params.rotationKeyMultibase,
+    encryptionKeyMultibase: params.encryptionKeyMultibase,
     services: [
       buildDeveloperProfileService({
         did,
-        shortId,
+        shortId: uniqueId,
         displayName: params.displayName,
         bio: params.bio,
         links: params.links,
       }),
-      buildPublishedAssetsService({ did, shortId }),
+      buildPublishedAssetsService({ did, shortId: uniqueId }),
     ],
-  });
+  }) as Record<string, unknown>;
 
   validateKeySeparation(
     document as Parameters<typeof validateKeySeparation>[0],
@@ -338,7 +378,7 @@ export async function createDeveloperDid(params: {
     `INSERT INTO did_documents
      (did, type, subtype, namespace, unique_id, document, status)
      VALUES ($1, 'dev', 'identity', $2, $3, $4, 'active')`,
-    [did, params.namespace, shortId, JSON.stringify(document)],
+    [did, params.networkId, uniqueId, JSON.stringify(document)],
   );
 
   return { did, document };
@@ -397,7 +437,6 @@ export async function updateDeveloperDid(
 
   const updatedDoc = {
     ...doc,
-    updated: new Date().toISOString(),
   };
 
   const client = await pool.connect();
@@ -480,7 +519,6 @@ export async function rotateSigningKey(params: {
 
   const updatedDoc = {
     ...doc,
-    updated: new Date().toISOString(),
   };
 
   const client = await pool.connect();
@@ -506,4 +544,98 @@ export async function rotateSigningKey(params: {
   }
 
   await invalidateDidCache(params.did);
+}
+
+export async function createSkillFamilyDid(params: {
+  familyDid: string;
+  controllerDid: string;
+  name: string;
+  description?: string;
+  category?: string;
+  tags?: string[];
+}): Promise<void> {
+  const parsed = parseDidUrl(params.controllerDid);
+  const networkId = parsed.components.networkId;
+
+  const document = {
+    "@context": [
+      "https://www.w3.org/ns/did/v1",
+      "https://did-ai.io/contexts/v1",
+    ],
+    id: params.familyDid,
+    controller: params.controllerDid,
+    service: [
+      {
+        id: `${params.familyDid}#family`,
+        type: "SkillFamily",
+        serviceEndpoint: `https://did-ai.io/skills/${networkId}/${parsed.components.uniqueId}`,
+        name: params.name,
+        description: params.description,
+        category: params.category,
+        tags: params.tags ?? [],
+      },
+    ],
+  };
+
+  validateSkillAgentConstraints(
+    document as Parameters<typeof validateSkillAgentConstraints>[0],
+  );
+
+  await pool.query(
+    `INSERT INTO did_documents (did, type, subtype, namespace, unique_id, document, status)
+     VALUES ($1, 'skill', 'family', $2, $3, $4, 'active')`,
+    [
+      params.familyDid,
+      networkId,
+      parsed.components.uniqueId,
+      JSON.stringify(document),
+    ],
+  );
+}
+
+export async function createAgentFamilyDid(params: {
+  familyDid: string;
+  controllerDid: string;
+  name: string;
+  description?: string;
+  tags?: string[];
+  visibility: "public" | "unlisted" | "private";
+}): Promise<void> {
+  const parsed = parseDidUrl(params.controllerDid);
+  const networkId = parsed.components.networkId;
+
+  const document = {
+    "@context": [
+      "https://www.w3.org/ns/did/v1",
+      "https://did-ai.io/contexts/v1",
+    ],
+    id: params.familyDid,
+    controller: params.controllerDid,
+    service: [
+      {
+        id: `${params.familyDid}#family`,
+        type: "AgentFamily",
+        serviceEndpoint: `https://did-ai.io/agents/${networkId}/${parsed.components.uniqueId}`,
+        name: params.name,
+        description: params.description,
+        tags: params.tags ?? [],
+        visibility: params.visibility,
+      },
+    ],
+  };
+
+  validateSkillAgentConstraints(
+    document as Parameters<typeof validateSkillAgentConstraints>[0],
+  );
+
+  await pool.query(
+    `INSERT INTO did_documents (did, type, subtype, namespace, unique_id, document, status)
+     VALUES ($1, 'agent', 'family', $2, $3, $4, 'active')`,
+    [
+      params.familyDid,
+      networkId,
+      parsed.components.uniqueId,
+      JSON.stringify(document),
+    ],
+  );
 }

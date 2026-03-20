@@ -33,6 +33,7 @@ function getEnv(key: string): string {
 export const config = {
   nodeEnv: getEnv("NODE_ENV"),
   port: parseInt(getEnv("PORT"), 10),
+  vdrNetworkId: process.env.VDR_NETWORK_ID ?? "main",
 
   postgres: {
     host: getEnv("POSTGRES_HOST"),

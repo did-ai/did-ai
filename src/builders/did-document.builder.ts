@@ -7,10 +7,10 @@ export interface BuilderParams {
   services?: object[];
   signingKeyMultibase?: string;
   rotationKeyMultibase?: string;
+  encryptionKeyMultibase?: string;
 }
 
 export function buildDidDocument(params: BuilderParams): object {
-  const now = new Date().toISOString();
   const base = {
     "@context": [
       "https://www.w3.org/ns/did/v1",
@@ -19,31 +19,43 @@ export function buildDidDocument(params: BuilderParams): object {
     id: params.did,
     subtype: params.subtype,
     controller: params.controller,
-    created: now,
-    updated: now,
     service: params.services ?? [],
   };
 
   if (params.signingKeyMultibase && params.rotationKeyMultibase) {
+    const verificationMethod = [
+      {
+        id: `${params.did}#signing-key`,
+        type: "Ed25519VerificationKey2020",
+        controller: params.did,
+        publicKeyMultibase: params.signingKeyMultibase,
+      },
+      {
+        id: `${params.did}#rotation-key`,
+        type: "Ed25519VerificationKey2020",
+        controller: params.did,
+        publicKeyMultibase: params.rotationKeyMultibase,
+      },
+    ];
+
+    if (params.encryptionKeyMultibase) {
+      verificationMethod.push({
+        id: `${params.did}#encryption-key`,
+        type: "X25519KeyAgreementKey2020",
+        controller: params.did,
+        publicKeyMultibase: params.encryptionKeyMultibase,
+      });
+    }
+
     return {
       ...base,
-      verificationMethod: [
-        {
-          id: `${params.did}#signing-key`,
-          type: "Ed25519VerificationKey2020",
-          controller: params.did,
-          publicKeyMultibase: params.signingKeyMultibase,
-        },
-        {
-          id: `${params.did}#rotation-key`,
-          type: "Ed25519VerificationKey2020",
-          controller: params.did,
-          publicKeyMultibase: params.rotationKeyMultibase,
-        },
-      ],
+      verificationMethod,
       assertionMethod: [`${params.did}#signing-key`],
       authentication: [`${params.did}#signing-key`],
-      capabilityDelegation: [`${params.did}#rotation-key`],
+      capabilityInvocation: [`${params.did}#rotation-key`],
+      keyAgreement: params.encryptionKeyMultibase
+        ? [`${params.did}#encryption-key`]
+        : undefined,
     };
   }
 
@@ -99,11 +111,11 @@ export interface SkillFamilyServiceParams {
 export function buildSkillFamilyService(
   params: SkillFamilyServiceParams,
 ): object {
-  const shortId = params.familyDid.split(":").pop()!;
+  const uniqueId = params.familyDid.split(":").pop()!;
   return {
     id: `${params.familyDid}#family`,
     type: "SkillFamily",
-    serviceEndpoint: `https://did-ai.io/skills/hub/${shortId}`,
+    serviceEndpoint: `https://did-ai.io/skills/hub/${uniqueId}`,
     name: params.name,
     description: params.description,
     category: params.category,
@@ -157,11 +169,11 @@ export interface AgentFamilyServiceParams {
 export function buildAgentFamilyService(
   params: AgentFamilyServiceParams,
 ): object {
-  const shortId = params.familyDid.split(":").pop()!;
+  const uniqueId = params.familyDid.split(":").pop()!;
   return {
     id: `${params.familyDid}#family`,
     type: "AgentFamily",
-    serviceEndpoint: `https://did-ai.io/agents/hub/${shortId}`,
+    serviceEndpoint: `https://did-ai.io/agents/hub/${uniqueId}`,
     name: params.name,
     description: params.description,
     tags: params.tags ?? [],
@@ -264,13 +276,13 @@ export interface VersionListServiceParams {
 export function buildVersionListService(
   params: VersionListServiceParams,
 ): object {
-  const shortId = params.familyDid.split(":").pop()!;
+  const uniqueId = params.familyDid.split(":").pop()!;
   const type = params.type;
 
   return {
     id: `${params.familyDid}#versions`,
     type: "VersionList",
-    serviceEndpoint: `https://did-ai.io/${type}s/hub/${shortId}/versions`,
+    serviceEndpoint: `https://did-ai.io/${type}s/hub/${uniqueId}/versions`,
     versions: params.versions,
   };
 }

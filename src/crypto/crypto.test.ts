@@ -8,31 +8,32 @@ import {
 import { signPayload, verifySignature } from "./signing.js";
 
 describe("generateDid", () => {
-  test("should generate valid dev DID", () => {
-    const did = generateDid("dev", "hub");
-    expect(did).toMatch(/^did:ai:dev:hub:[a-zA-Z0-9_-]{22}$/);
+  test("should generate valid dev DID with SAID", () => {
+    const keyPair = generateEd25519KeyPair();
+    const did = generateDid("dev", "hub", keyPair.publicKeyMultibase);
+    expect(did).toMatch(/^did:ai:hub:dev:[a-zA-Z0-9]{46}$/);
   });
 
   test("should generate valid skill DID", () => {
     const did = generateDid("skill", "test");
-    expect(did).toMatch(/^did:ai:skill:test:[a-zA-Z0-9_-]{22}$/);
+    expect(did).toMatch(/^did:ai:test:skill:[a-zA-Z0-9_-]{22}$/);
   });
 
   test("should generate valid agent DID", () => {
     const did = generateDid("agent", "hub");
-    expect(did).toMatch(/^did:ai:agent:hub:[a-zA-Z0-9_-]{22}$/);
+    expect(did).toMatch(/^did:ai:hub:agent:[a-zA-Z0-9_-]{22}$/);
   });
 
-  test("should throw on invalid namespace", () => {
+  test("should throw on invalid networkId", () => {
     expect(() => generateDid("dev", "")).toThrow();
-    expect(() => generateDid("dev", "InvalidNamespace")).toThrow();
+    expect(() => generateDid("dev", "InvalidNetworkId")).toThrow();
     expect(() => generateDid("dev", "-starts-with-hyphen")).toThrow();
     expect(() => generateDid("dev", "ends-with-hyphen-")).toThrow();
   });
 
-  test("should use default namespace hub", () => {
-    const did = generateDid("dev");
-    expect(did).toMatch(/^did:ai:dev:hub:/);
+  test("should generate dev DID without signing key (fallback to nanoid)", () => {
+    const did = generateDid("dev", "hub");
+    expect(did).toMatch(/^did:ai:hub:dev:[a-zA-Z0-9_-]{22}$/);
   });
 });
 

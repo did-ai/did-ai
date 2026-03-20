@@ -2,6 +2,7 @@ import { test, describe, expect } from "vitest";
 import {
   validateKeySeparation,
   validateAgentConstraints,
+  validateSkillAgentConstraints,
   validateVersionStatus,
   validateSkillBindings,
 } from "./constraints.js";
@@ -13,11 +14,13 @@ describe("validateKeySeparation", () => {
       validateKeySeparation({
         verificationMethod: [
           {
-            id: "did:ai:dev:hub:abc#signing-key",
+            id: "did:ai:hub:dev:abc#signing-key",
             type: "Ed25519VerificationKey2020",
-            assertionMethod: ["did:ai:dev:hub:abc#signing-key"],
+            controller: "did:ai:hub:dev:abc",
+            publicKeyMultibase: "zabc123",
           },
         ],
+        assertionMethod: ["did:ai:hub:dev:abc#signing-key"],
       }),
     ).not.toThrow();
   });
@@ -27,11 +30,13 @@ describe("validateKeySeparation", () => {
       validateKeySeparation({
         verificationMethod: [
           {
-            id: "did:ai:dev:hub:abc#encryption-key",
+            id: "did:ai:hub:dev:abc#encryption-key",
             type: "X25519KeyAgreementKey2020",
-            keyAgreement: ["did:ai:dev:hub:abc#encryption-key"],
+            controller: "did:ai:hub:dev:abc",
+            publicKeyMultibase: "zdef456",
           },
         ],
+        keyAgreement: ["did:ai:hub:dev:abc#encryption-key"],
       }),
     ).not.toThrow();
   });
@@ -41,11 +46,13 @@ describe("validateKeySeparation", () => {
       validateKeySeparation({
         verificationMethod: [
           {
-            id: "did:ai:dev:hub:abc#signing-key",
+            id: "did:ai:hub:dev:abc#signing-key",
             type: "Ed25519VerificationKey2020",
-            keyAgreement: ["did:ai:dev:hub:abc#signing-key"],
+            controller: "did:ai:hub:dev:abc",
+            publicKeyMultibase: "zabc123",
           },
         ],
+        keyAgreement: ["did:ai:hub:dev:abc#signing-key"],
       }),
     ).toThrow(DidAiError);
   });
@@ -55,17 +62,73 @@ describe("validateKeySeparation", () => {
       validateKeySeparation({
         verificationMethod: [
           {
-            id: "did:ai:dev:hub:abc#encryption-key",
+            id: "did:ai:hub:dev:abc#encryption-key",
             type: "X25519KeyAgreementKey2020",
-            assertionMethod: ["did:ai:dev:hub:abc#encryption-key"],
+            controller: "did:ai:hub:dev:abc",
+            publicKeyMultibase: "zdef456",
           },
         ],
+        assertionMethod: ["did:ai:hub:dev:abc#encryption-key"],
       }),
     ).toThrow(DidAiError);
   });
 
   test("should pass when no verificationMethod", () => {
     expect(() => validateKeySeparation({})).not.toThrow();
+  });
+
+  test("should reject duplicate VM ids", () => {
+    expect(() =>
+      validateKeySeparation({
+        verificationMethod: [
+          {
+            id: "did:ai:hub:dev:abc#key1",
+            type: "Ed25519VerificationKey2020",
+            controller: "did:ai:hub:dev:abc",
+            publicKeyMultibase: "zabc123",
+          },
+          {
+            id: "did:ai:hub:dev:abc#key1",
+            type: "Ed25519VerificationKey2020",
+            controller: "did:ai:hub:dev:abc",
+            publicKeyMultibase: "zdef456",
+          },
+        ],
+      }),
+    ).toThrow(DidAiError);
+  });
+});
+
+describe("validateSkillAgentConstraints", () => {
+  test("should reject verificationMethod for skill/agent", () => {
+    expect(() =>
+      validateSkillAgentConstraints({
+        verificationMethod: [
+          {
+            id: "did:ai:hub:dev:abc#signing-key",
+            type: "Ed25519VerificationKey2020",
+            controller: "did:ai:hub:dev:abc",
+            publicKeyMultibase: "zabc123",
+          },
+        ],
+      }),
+    ).toThrow(DidAiError);
+  });
+
+  test("should reject assertionMethod for skill/agent", () => {
+    expect(() =>
+      validateSkillAgentConstraints({
+        assertionMethod: ["did:ai:hub:dev:abc#signing-key"],
+      }),
+    ).toThrow(DidAiError);
+  });
+
+  test("should accept skill/agent without verification relationships", () => {
+    expect(() =>
+      validateSkillAgentConstraints({
+        service: [{ type: "SkillFamily" }],
+      }),
+    ).not.toThrow();
   });
 });
 
@@ -140,7 +203,7 @@ describe("validateSkillBindings", () => {
     expect(() =>
       validateSkillBindings([
         {
-          skillFamilyDid: "did:ai:skill:hub:abc",
+          skillFamilyDid: "did:ai:hub:skill:abc",
           versionPolicy: "locked",
           lockedVersion: "1.0.0",
           role: "primary",
@@ -153,7 +216,7 @@ describe("validateSkillBindings", () => {
     expect(() =>
       validateSkillBindings([
         {
-          skillFamilyDid: "did:ai:skill:hub:abc",
+          skillFamilyDid: "did:ai:hub:skill:abc",
           versionPolicy: "auto_patch",
           role: "fallback",
         },
@@ -165,7 +228,7 @@ describe("validateSkillBindings", () => {
     expect(() =>
       validateSkillBindings([
         {
-          skillFamilyDid: "did:ai:skill:hub:abc",
+          skillFamilyDid: "did:ai:hub:skill:abc",
           versionPolicy: "auto_minor",
           role: "optional" as "primary",
         },
@@ -177,7 +240,7 @@ describe("validateSkillBindings", () => {
     expect(() =>
       validateSkillBindings([
         {
-          skillFamilyDid: "did:ai:skill:hub:abc",
+          skillFamilyDid: "did:ai:hub:skill:abc",
           versionPolicy: "locked",
           role: "primary",
         },
@@ -189,7 +252,7 @@ describe("validateSkillBindings", () => {
     expect(() =>
       validateSkillBindings([
         {
-          skillFamilyDid: "did:ai:skill:hub:abc",
+          skillFamilyDid: "did:ai:hub:skill:abc",
           versionPolicy: "invalid" as "locked",
           role: "primary",
         },

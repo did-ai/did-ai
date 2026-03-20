@@ -9,15 +9,25 @@ export async function didRoutes(app: FastifyInstance) {
     Querystring: { version?: string; service?: string };
   }>("/:did", async (req, reply) => {
     const { version, service } = req.query;
-    const doc = await resolveDid(req.params.did, { version, service });
+    const result = await resolveDid(req.params.did, { version, service });
 
-    const docString = JSON.stringify(doc);
+    if (result.didResolutionMetadata.error === "notFound") {
+      return reply.status(404).send(result);
+    }
+    if (result.didResolutionMetadata.error === "deactivated") {
+      return reply.status(410).send(result);
+    }
+    if (result.didResolutionMetadata.error === "saidMismatch") {
+      return reply.status(400).send(result);
+    }
+
+    const docString = JSON.stringify(result.didDocument);
     const etag = `"${sha256hex(docString).slice(0, 32)}"`;
 
     return reply
       .header("Cache-Control", "max-age=3600")
       .header("ETag", etag)
-      .send({ success: true, data: doc });
+      .send(result);
   });
 
   app.post("/", { preHandler: didAuthMiddleware }, async (_req) => {
@@ -35,10 +45,15 @@ export async function didRoutes(app: FastifyInstance) {
   app.delete<{ Params: { did: string } }>(
     "/:did",
     { preHandler: didAuthMiddleware },
-    async (req) => {
+    async (req, reply) => {
       const callerDid = (req as typeof req & { callerDid: string }).callerDid;
       await deactivateDid(req.params.did, callerDid);
-      return { success: true, data: { deactivated: true } };
+      return reply.status(410).send({
+        success: true,
+        data: { deactivated: true },
+        didResolutionMetadata: {},
+        didDocumentMetadata: { deactivated: true },
+      });
     },
   );
 }

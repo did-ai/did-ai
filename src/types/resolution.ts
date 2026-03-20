@@ -1,53 +1,44 @@
 export interface DIDDocumentMetadata {
-  created: string;
-  updated: string;
-  deactivated?: boolean;
-  versionId?: string;
-  nextVersionId?: string;
-  equivalentId: string[];
+  readonly created: string;
+  readonly updated: string;
+  readonly deactivated: boolean;
+  readonly versionId?: string;
 }
 
 export interface DIDResolutionMetadata {
-  contentType: string;
-  error?:
-    | "notFound"
-    | "deactivated"
-    | "versionNotFound"
-    | "invalidDid"
-    | "invalidVersion";
+  readonly contentType?: string;
+  readonly error?: string;
+  readonly deprecatedNetwork?: boolean;
 }
 
-export interface ResolutionResponse<T> {
-  didDocument?: T;
-  didDocumentMetadata?: DIDDocumentMetadata;
-  didResolutionMetadata: DIDResolutionMetadata;
+export interface DIDResolutionResult {
+  readonly didDocument: Record<string, unknown> | null;
+  readonly didDocumentMetadata: DIDDocumentMetadata;
+  readonly didResolutionMetadata: DIDResolutionMetadata;
 }
 
-export function buildDocumentMetadata(
+export function buildResolutionResult(
+  doc: Record<string, unknown> | null,
   created: string,
   updated: string,
+  deactivated: boolean,
   options?: {
-    deactivated?: boolean;
     versionId?: string;
-    nextVersionId?: string;
+    error?: string;
+    contentType?: string;
   },
-): DIDDocumentMetadata {
+): DIDResolutionResult {
   return {
-    created,
-    updated,
-    equivalentId: [],
-    ...(options?.deactivated && { deactivated: true }),
-    ...(options?.versionId && { versionId: options.versionId }),
-    ...(options?.nextVersionId && { nextVersionId: options.nextVersionId }),
-  };
-}
-
-export function buildResolutionMetadata(
-  contentType: string,
-  error?: DIDResolutionMetadata["error"],
-): DIDResolutionMetadata {
-  return {
-    contentType,
-    ...(error && { error }),
+    didDocument: doc,
+    didDocumentMetadata: {
+      created,
+      updated,
+      deactivated,
+      ...(options?.versionId && { versionId: options.versionId }),
+    },
+    didResolutionMetadata: {
+      ...(options?.contentType && { contentType: options.contentType }),
+      ...(options?.error && { error: options.error }),
+    },
   };
 }

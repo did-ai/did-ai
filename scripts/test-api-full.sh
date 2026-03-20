@@ -89,6 +89,15 @@ test_endpoint "Search Agents (with query)" "GET" "/api/v1/discover/agents?q=exam
 
 echo ""
 echo "----------------------------------------"
+echo "  DID Resolution with Version Query Tests"
+echo "----------------------------------------"
+
+test_endpoint "Resolve DID with version query (non-existent version)" "GET" "/api/v1/dids/did:ai:skill:hub:test?version=1.0.0" "404"
+test_endpoint "Resolve DID with service query" "GET" "/api/v1/dids/did:ai:dev:hub:test?service=test" "404"
+test_endpoint "Resolve DID with fragment" "GET" "/api/v1/dids/did:ai:dev:hub:test#signing-key" "404"
+
+echo ""
+echo "----------------------------------------"
 echo "  Summary"
 echo "----------------------------------------"
 echo ""
